@@ -163,6 +163,24 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
     }
 
     @Override
+    protected ByteBuf allocateBuffer(ChannelHandlerContext ctx, ByteBuf msg, boolean preferDirect) {
+        int bufSize = 0;
+        int remaining = msg.readableBytes();
+        while (remaining > 0) {
+            int curSize = Math.min(blockSize, remaining);
+            remaining -= curSize;
+            // calculate the total compressed size of the current block (including header) and add to the total
+            bufSize += compressor.maxCompressedLength(curSize) + HEADER_LENGTH;
+        }
+
+        if (preferDirect) {
+            return ctx.alloc().ioBuffer(bufSize);
+        } else {
+            return ctx.alloc().heapBuffer(bufSize);
+        }
+    }
+
+    @Override
     protected void encode(ChannelHandlerContext ctx, ByteBuf in, ByteBuf out) throws Exception {
         if (finished) {
             out.writeBytes(in);
@@ -194,7 +212,8 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         checksum.update(buffer.array(), buffer.arrayOffset(), currentBlockLength);
         final int check = (int) checksum.getValue();
 
-        out.ensureWritable(compressedBlockSize);
+        final int bufSize = compressor.maxCompressedLength(buffer.readableBytes()) + HEADER_LENGTH;
+        out.ensureWritable(bufSize);
         final int idx = out.writerIndex();
         int compressedLength;
         try {
@@ -224,6 +243,16 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         currentBlockLength = 0;
 
         this.currentBlockLength = currentBlockLength;
+    }
+
+    @Override
+    public void flush(final ChannelHandlerContext ctx) throws Exception {
+        if (buffer != null && buffer.isReadable()) {
+            final ByteBuf buf = allocateBuffer(ctx, buffer, preferDirect);
+            flushBufferedData(buf);
+            ctx.write(buf);
+        }
+        ctx.flush();
     }
 
     private ChannelFuture finishEncode(final ChannelHandlerContext ctx, ChannelPromise promise) {
@@ -340,5 +369,13 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
     public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
         super.handlerRemoved(ctx);
         cleanup();
+    }
+
+    public int getBlockSize() {
+        return blockSize;
+    }
+
+    public int currentBlockLength() {
+        return currentBlockLength;
     }
 }
