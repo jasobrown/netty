@@ -74,7 +74,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     @Test
     public void testAllocateDirectBuffer() {
         Lz4FrameEncoder encoder = new Lz4FrameEncoder();
-        final int blockSize = encoder.getBlockSize();
+        final int blockSize = encoder.blockSize();
         testAllocateBuffer(blockSize - 13, true);
         testAllocateBuffer(blockSize * 5, true);
     }
@@ -82,7 +82,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     @Test
     public void testAllocateHeapBuffer() {
         Lz4FrameEncoder encoder = new Lz4FrameEncoder();
-        final int blockSize = encoder.getBlockSize();
+        final int blockSize = encoder.blockSize();
         testAllocateBuffer(blockSize - 13, false);
         testAllocateBuffer(blockSize * 5, false);
     }
@@ -120,6 +120,6 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
         channel.flush();
         Assert.assertTrue(channel.finish());
         Assert.assertTrue(channel.releaseOutbound());
-        Assert. assertFalse(channel.releaseInbound());
+        Assert.assertFalse(channel.releaseInbound());
     }
 }
