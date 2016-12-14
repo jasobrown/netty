@@ -16,6 +16,7 @@
 package io.netty.handler.codec.compression;
 
 import java.io.InputStream;
+import java.util.zip.Checksum;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -27,10 +28,15 @@ import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.EncoderException;
 import net.jpountz.lz4.LZ4BlockInputStream;
+import net.jpountz.lz4.LZ4Factory;
+import net.jpountz.xxhash.XXHashFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import static io.netty.handler.codec.compression.Lz4Constants.DEFAULT_BLOCK_SIZE;
+import static io.netty.handler.codec.compression.Lz4Constants.DEFAULT_SEED;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -104,6 +110,20 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
                 out.release();
             }
         }
+    }
+
+    @Test (expected = EncoderException.class)
+    public void testAllocateDirectBuffer_ExceedMaxEncodeSize() {
+        final int maxEncodeSize = 1024;
+        Checksum checksum = XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum();
+        Lz4FrameEncoder encoder = new Lz4FrameEncoder(LZ4Factory.fastestInstance(), true,
+                                                      Lz4Constants.DEFAULT_BLOCK_SIZE,
+                                                      checksum,
+                                                      maxEncodeSize);
+        int inputBufferSize = maxEncodeSize * 10;
+        ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer(inputBufferSize, inputBufferSize);
+        buf.writerIndex(inputBufferSize);
+        encoder.allocateBuffer(null, buf, false);
     }
 
     @Test

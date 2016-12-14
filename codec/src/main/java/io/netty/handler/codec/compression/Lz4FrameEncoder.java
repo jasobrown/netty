@@ -24,6 +24,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import io.netty.channel.ChannelPromiseNotifier;
+import io.netty.handler.codec.EncoderException;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.util.concurrent.EventExecutor;
 import net.jpountz.lz4.LZ4Compressor;
@@ -54,6 +55,8 @@ import static io.netty.handler.codec.compression.Lz4Constants.*;
  *  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *     * * * * * * * * * *
  */
 public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
+    private static final int DEFAULT_MAX_ENCODE_SIZE = Integer.MAX_VALUE;
+
     private final int blockSize;
 
     /**
@@ -67,7 +70,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
     private Checksum checksum;
 
     /**
-     * Compression level of current LZ4 encoder (depends on {@link #compressedBlockSize}).
+     * Compression level of current LZ4 encoder (depends on {@link #blockSize}).
      */
     private final int compressionLevel;
 
@@ -82,9 +85,9 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
     private int currentBlockLength;
 
     /**
-     * Maximum size of compressed block with header.
+     * Maximum size for any buffer to write encoded (compressed) data into.
      */
-    private final int compressedBlockSize;
+    private final int maxEncodeSize;
 
     /**
      * Indicates if the compressed stream has been finished.
@@ -115,7 +118,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
      */
     public Lz4FrameEncoder(boolean highCompressor) {
         this(LZ4Factory.fastestInstance(), highCompressor, DEFAULT_BLOCK_SIZE,
-                XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum());
+                XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum(), DEFAULT_MAX_ENCODE_SIZE);
     }
 
     /**
@@ -129,8 +132,10 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
      * @param blockSize       the maximum number of bytes to try to compress at once,
      *                        must be >= 64 and <= 32 M
      * @param checksum        the {@link Checksum} instance to use to check data for integrity
+     * @param maxEncodeSize   the maximum size for an encode (compressed) buffer
      */
-    public Lz4FrameEncoder(LZ4Factory factory, boolean highCompressor, int blockSize, Checksum checksum) {
+    public Lz4FrameEncoder(LZ4Factory factory, boolean highCompressor, int blockSize,
+                           Checksum checksum, int maxEncodeSize) {
         if (factory == null) {
             throw new NullPointerException("factory");
         }
@@ -144,8 +149,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         compressionLevel = compressionLevel(blockSize);
         this.blockSize = blockSize;
         currentBlockLength = 0;
-        compressedBlockSize = HEADER_LENGTH + compressor.maxCompressedLength(blockSize);
-
+        this.maxEncodeSize = maxEncodeSize;
         finished = false;
     }
 
@@ -171,6 +175,11 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
             remaining -= curSize;
             // calculate the total compressed size of the current block (including header) and add to the total
             bufSize += compressor.maxCompressedLength(curSize) + HEADER_LENGTH;
+        }
+
+        if (bufSize > maxEncodeSize) {
+            String errorMsg = "requested encode buffer size (%d bytes) exceeds the maximum allowable size (%d bytes)";
+            throw new EncoderException(String.format(errorMsg, bufSize, maxEncodeSize));
         }
 
         if (preferDirect) {
