@@ -25,7 +25,6 @@ import org.junit.Test;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -48,7 +47,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
-        when(ctx.alloc()).thenReturn(PooledByteBufAllocator.DEFAULT);
+        when(ctx.alloc()).thenReturn(ByteBufAllocator.DEFAULT);
     }
 
     @Override
@@ -95,7 +94,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
 
     private void testAllocateBuffer(int bufSize, boolean isDirect) {
         // allocate the input buffer to an arbitrary size less than the blockSize
-        ByteBuf in = PooledByteBufAllocator.DEFAULT.buffer(bufSize, bufSize);
+        ByteBuf in = ByteBufAllocator.DEFAULT.buffer(bufSize, bufSize);
         in.writerIndex(in.capacity());
 
         ByteBuf out = null;
@@ -121,7 +120,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
                                                       checksum,
                                                       maxEncodeSize);
         int inputBufferSize = maxEncodeSize * 10;
-        ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer(inputBufferSize, inputBufferSize);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(inputBufferSize, inputBufferSize);
         try {
             buf.writerIndex(inputBufferSize);
             encoder.allocateBuffer(null, buf, false);
