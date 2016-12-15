@@ -23,6 +23,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
@@ -35,7 +36,6 @@ import net.jpountz.xxhash.XXHashFactory;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import static io.netty.handler.codec.compression.Lz4Constants.DEFAULT_BLOCK_SIZE;
 import static io.netty.handler.codec.compression.Lz4Constants.DEFAULT_SEED;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
@@ -131,7 +131,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
         Lz4FrameEncoder encoder = new Lz4FrameEncoder();
         EmbeddedChannel channel = new EmbeddedChannel(encoder);
         int size = 27;
-        ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer(size, size);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(size, size);
         buf.writerIndex(size);
         Assert.assertEquals(0, encoder.currentBlockLength());
         channel.write(buf);

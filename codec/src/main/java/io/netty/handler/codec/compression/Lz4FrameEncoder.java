@@ -132,10 +132,26 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
      * @param blockSize       the maximum number of bytes to try to compress at once,
      *                        must be >= 64 and <= 32 M
      * @param checksum        the {@link Checksum} instance to use to check data for integrity
-     * @param maxEncodeSize   the maximum size for an encode (compressed) buffer
      */
+    public Lz4FrameEncoder(LZ4Factory factory, boolean highCompressor, int blockSize, Checksum checksum) {
+        this(factory, highCompressor, blockSize, checksum, DEFAULT_MAX_ENCODE_SIZE);
+    }
+
+        /**
+         * Creates a new customizable LZ4 encoder.
+         *
+         * @param factory         user customizable {@link LZ4Factory} instance
+         *                        which may be JNI bindings to the original C implementation, a pure Java implementation
+         *                        or a Java implementation that uses the {@link sun.misc.Unsafe}
+         * @param highCompressor  if {@code true} codec will use compressor which requires more memory
+         *                        and is slower but compresses more efficiently
+         * @param blockSize       the maximum number of bytes to try to compress at once,
+         *                        must be >= 64 and <= 32 M
+         * @param checksum        the {@link Checksum} instance to use to check data for integrity
+         * @param maxEncodeSize   the maximum size for an encode (compressed) buffer
+         */
     public Lz4FrameEncoder(LZ4Factory factory, boolean highCompressor, int blockSize,
-                           Checksum checksum, int maxEncodeSize) {
+        Checksum checksum, int maxEncodeSize) {
         if (factory == null) {
             throw new NullPointerException("factory");
         }
