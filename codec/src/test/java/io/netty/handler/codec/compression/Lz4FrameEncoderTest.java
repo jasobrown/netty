@@ -122,8 +122,12 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
                                                       maxEncodeSize);
         int inputBufferSize = maxEncodeSize * 10;
         ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer(inputBufferSize, inputBufferSize);
-        buf.writerIndex(inputBufferSize);
-        encoder.allocateBuffer(null, buf, false);
+        try {
+            buf.writerIndex(inputBufferSize);
+            encoder.allocateBuffer(null, buf, false);
+        } finally {
+            buf.release();
+        }
     }
 
     @Test
