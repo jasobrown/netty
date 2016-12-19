@@ -40,6 +40,12 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.when;
 
 public class Lz4FrameEncoderTest extends AbstractEncoderTest {
+    /**
+     * For the purposes of this test, if we pass this (very small) size of buffer into
+     * {@link Lz4FrameEncoder#allocateBuffer(ChannelHandlerContext, ByteBuf, boolean)}, we should get back
+     * an empty buffer.
+     */
+    private static final int NONALLOCATABLE_SIZE = 1;
 
     @Mock
     private ChannelHandlerContext ctx;
@@ -78,31 +84,36 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
 
     @Test
     public void testAllocateDirectBuffer() {
-        Lz4FrameEncoder encoder = new Lz4FrameEncoder();
-        final int blockSize = encoder.blockSize();
-        testAllocateBuffer(blockSize - 13, true);
-        testAllocateBuffer(blockSize * 5, true);
+        final int blockSize = 100;
+        testAllocateBuffer(blockSize, blockSize - 13, true);
+        testAllocateBuffer(blockSize, blockSize * 5, true);
+        testAllocateBuffer(blockSize, NONALLOCATABLE_SIZE, true);
     }
 
     @Test
     public void testAllocateHeapBuffer() {
-        Lz4FrameEncoder encoder = new Lz4FrameEncoder();
-        final int blockSize = encoder.blockSize();
-        testAllocateBuffer(blockSize - 13, false);
-        testAllocateBuffer(blockSize * 5, false);
+        final int blockSize = 100;
+        testAllocateBuffer(blockSize, blockSize - 13, false);
+        testAllocateBuffer(blockSize, blockSize * 5, false);
+        testAllocateBuffer(blockSize, NONALLOCATABLE_SIZE, false);
     }
 
-    private void testAllocateBuffer(int bufSize, boolean isDirect) {
+    private void testAllocateBuffer(int blockSize, int bufSize, boolean isDirect) {
         // allocate the input buffer to an arbitrary size less than the blockSize
         ByteBuf in = ByteBufAllocator.DEFAULT.buffer(bufSize, bufSize);
         in.writerIndex(in.capacity());
 
         ByteBuf out = null;
         try {
-            out = new Lz4FrameEncoder().allocateBuffer(ctx, in, isDirect);
+            Lz4FrameEncoder encoder = newEncoder(blockSize, Lz4FrameEncoder.DEFAULT_MAX_ENCODE_SIZE);
+            out = encoder.allocateBuffer(ctx, in, isDirect);
             Assert.assertNotNull(out);
-            Assert.assertTrue(out.writableBytes() > 0);
-            Assert.assertEquals(isDirect, out.isDirect());
+            if (NONALLOCATABLE_SIZE == bufSize) {
+                Assert.assertFalse(out.isWritable());
+            } else {
+                Assert.assertTrue(out.writableBytes() > 0);
+                Assert.assertEquals(isDirect, out.isDirect());
+            }
         } finally {
             in.release();
             if (out != null) {
@@ -114,33 +125,35 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     @Test (expected = EncoderException.class)
     public void testAllocateDirectBuffer_ExceedMaxEncodeSize() {
         final int maxEncodeSize = 1024;
-        Checksum checksum = XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum();
-        Lz4FrameEncoder encoder = new Lz4FrameEncoder(LZ4Factory.fastestInstance(), true,
-                                                      Lz4Constants.DEFAULT_BLOCK_SIZE,
-                                                      checksum,
-                                                      maxEncodeSize);
+        Lz4FrameEncoder encoder = newEncoder(Lz4Constants.DEFAULT_BLOCK_SIZE, maxEncodeSize);
         int inputBufferSize = maxEncodeSize * 10;
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(inputBufferSize, inputBufferSize);
         try {
             buf.writerIndex(inputBufferSize);
-            encoder.allocateBuffer(null, buf, false);
+            encoder.allocateBuffer(ctx, buf, false);
         } finally {
             buf.release();
         }
     }
 
+    private Lz4FrameEncoder newEncoder(int blockSize, int maxEncodeSize) {
+        Checksum checksum = XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum();
+        Lz4FrameEncoder encoder = new Lz4FrameEncoder(LZ4Factory.fastestInstance(), true,
+                                                      blockSize,
+                                                      checksum,
+                                                      maxEncodeSize);
+        encoder.handlerAdded(ctx);
+        return encoder;
+    }
+
     @Test (expected = EncoderException.class)
     public void testAllocateDirectBuffer_OverflowsOutputSize() {
         final int maxEncodeSize = Integer.MAX_VALUE;
-        Checksum checksum = XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum();
-        Lz4FrameEncoder encoder = new Lz4FrameEncoder(LZ4Factory.fastestInstance(), true,
-                                                      Lz4Constants.DEFAULT_BLOCK_SIZE,
-                                                      checksum,
-                                                      maxEncodeSize);
+        Lz4FrameEncoder encoder = newEncoder(Lz4Constants.DEFAULT_BLOCK_SIZE, maxEncodeSize);
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(maxEncodeSize, maxEncodeSize);
         try {
             buf.writerIndex(maxEncodeSize);
-            encoder.allocateBuffer(null, buf, false);
+            encoder.allocateBuffer(ctx, buf, false);
         } finally {
             buf.release();
         }
@@ -153,13 +166,36 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
         int size = 27;
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(size, size);
         buf.writerIndex(size);
-        Assert.assertEquals(0, encoder.currentBlockLength());
+        Assert.assertEquals(0, encoder.getBuffer().readableBytes());
         channel.write(buf);
         Assert.assertTrue(channel.outboundMessages().isEmpty());
-        Assert.assertEquals(size, encoder.currentBlockLength());
+        Assert.assertEquals(size, encoder.getBuffer().readableBytes());
         channel.flush();
         Assert.assertTrue(channel.finish());
         Assert.assertTrue(channel.releaseOutbound());
         Assert.assertFalse(channel.releaseInbound());
+    }
+
+    @Test
+    public void testAllocatingAroundBlockSize() {
+        int blockSize = 100;
+        Lz4FrameEncoder encoder = newEncoder(blockSize, Lz4FrameEncoder.DEFAULT_MAX_ENCODE_SIZE);
+        EmbeddedChannel channel = new EmbeddedChannel(encoder);
+
+        int size = blockSize - 1;
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(size, size);
+        buf.writerIndex(size);
+        Assert.assertEquals(0, encoder.getBuffer().readableBytes());
+        channel.write(buf);
+        Assert.assertEquals(size, encoder.getBuffer().readableBytes());
+
+        int nextSize = size - 1;
+        buf = ByteBufAllocator.DEFAULT.buffer(nextSize, nextSize);
+        buf.writerIndex(nextSize);
+        channel.write(buf);
+        Assert.assertEquals(size + nextSize - blockSize, encoder.getBuffer().readableBytes());
+
+        channel.flush();
+        Assert.assertEquals(0, encoder.getBuffer().readableBytes());
     }
 }
