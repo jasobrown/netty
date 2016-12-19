@@ -129,6 +129,23 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
         }
     }
 
+    @Test (expected = EncoderException.class)
+    public void testAllocateDirectBuffer_OverflowsOutputSize() {
+        final int maxEncodeSize = Integer.MAX_VALUE;
+        Checksum checksum = XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum();
+        Lz4FrameEncoder encoder = new Lz4FrameEncoder(LZ4Factory.fastestInstance(), true,
+                                                      Lz4Constants.DEFAULT_BLOCK_SIZE,
+                                                      checksum,
+                                                      maxEncodeSize);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(maxEncodeSize, maxEncodeSize);
+        try {
+            buf.writerIndex(maxEncodeSize);
+            encoder.allocateBuffer(null, buf, false);
+        } finally {
+            buf.release();
+        }
+    }
+
     @Test
     public void testFlush() {
         Lz4FrameEncoder encoder = new Lz4FrameEncoder();

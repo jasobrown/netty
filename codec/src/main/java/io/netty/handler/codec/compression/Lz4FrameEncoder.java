@@ -118,7 +118,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
      */
     public Lz4FrameEncoder(boolean highCompressor) {
         this(LZ4Factory.fastestInstance(), highCompressor, DEFAULT_BLOCK_SIZE,
-                XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum(), DEFAULT_MAX_ENCODE_SIZE);
+                XXHashFactory.fastestInstance().newStreamingHash32(DEFAULT_SEED).asChecksum());
     }
 
     /**
@@ -151,7 +151,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
          * @param maxEncodeSize   the maximum size for an encode (compressed) buffer
          */
     public Lz4FrameEncoder(LZ4Factory factory, boolean highCompressor, int blockSize,
-        Checksum checksum, int maxEncodeSize) {
+                           Checksum checksum, int maxEncodeSize) {
         if (factory == null) {
             throw new NullPointerException("factory");
         }
@@ -193,15 +193,15 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
             bufSize += compressor.maxCompressedLength(curSize) + HEADER_LENGTH;
         }
 
-        if (bufSize > maxEncodeSize) {
+        if (bufSize > maxEncodeSize || 0 > bufSize) {
             String errorMsg = "requested encode buffer size (%d bytes) exceeds the maximum allowable size (%d bytes)";
             throw new EncoderException(String.format(errorMsg, bufSize, maxEncodeSize));
         }
 
         if (preferDirect) {
-            return ctx.alloc().ioBuffer(bufSize);
+            return ctx.alloc().ioBuffer(bufSize, bufSize);
         } else {
-            return ctx.alloc().heapBuffer(bufSize);
+            return ctx.alloc().heapBuffer(bufSize, bufSize);
         }
     }
 
@@ -396,11 +396,11 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         cleanup();
     }
 
-    public final int blockSize() {
+    final int blockSize() {
         return blockSize;
     }
 
-    public final int currentBlockLength() {
+    final int currentBlockLength() {
         return currentBlockLength;
     }
 }
