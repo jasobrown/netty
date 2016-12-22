@@ -187,7 +187,7 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         int targetBufSize = 0;
         int remaining = msg.readableBytes() + buffer.readableBytes();
 
-        // overflow check
+        // quick overflow check
         if (remaining < 0) {
             throw new EncoderException("too much data to allocate a buffer for compression");
         }
@@ -199,8 +199,9 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
             targetBufSize += compressor.maxCompressedLength(curSize) + HEADER_LENGTH;
         }
 
-        // as compressor.maxCompressedLength(Integer.MAX_VALUE) would never wrap around again to be >= 0,
-        // this is a safe check for the overflow case
+        // in addition to just the raw byte count, the headers (HEADER_LENGTH) per block (configured via
+        // #blockSize) will also add to the targetBufSize, and the combination of those would never wrap around
+        // again to be >= 0, this is a good check for the overflow case.
         if (targetBufSize > maxEncodeSize || 0 > targetBufSize) {
             String errorMsg = "requested encode buffer size (%d bytes) exceeds the maximum allowable size (%d bytes)";
             throw new EncoderException(String.format(errorMsg, targetBufSize, maxEncodeSize));
@@ -232,11 +233,10 @@ public class Lz4FrameEncoder extends MessageToByteEncoder<ByteBuf> {
         }
 
         final ByteBuf buffer = this.buffer;
-        int length = in.readableBytes();
-        while (length > 0) {
+        int length;
+        while ((length = in.readableBytes()) > 0) {
             final int nextChunkSize = Math.min(length, buffer.writableBytes());
             in.readBytes(buffer, nextChunkSize);
-            length -= nextChunkSize;
 
             if (!buffer.isWritable()) {
                 flushBufferedData(out);

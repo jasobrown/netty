@@ -124,7 +124,7 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     }
 
     @Test (expected = EncoderException.class)
-    public void testAllocateDirectBuffer_ExceedMaxEncodeSize() {
+    public void testAllocateDirectBufferExceedMaxEncodeSize() {
         final int maxEncodeSize = 1024;
         Lz4FrameEncoder encoder = newEncoder(Lz4Constants.DEFAULT_BLOCK_SIZE, maxEncodeSize);
         int inputBufferSize = maxEncodeSize * 10;
@@ -148,12 +148,11 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
     }
 
     @Test (expected = EncoderException.class)
-    public void testAllocateDirectBuffer_OverflowsOutputSize() {
+    public void testAllocateOnHeapBufferOverflowsOutputSize() {
         final int maxEncodeSize = Integer.MAX_VALUE;
         Lz4FrameEncoder encoder = newEncoder(Lz4Constants.DEFAULT_BLOCK_SIZE, maxEncodeSize);
         ByteBuf buf = null;
-        try
-        {
+        try {
             buf = ByteBufAllocator.DEFAULT.buffer(maxEncodeSize, maxEncodeSize);
             buf.writerIndex(maxEncodeSize);
             encoder.allocateBuffer(ctx, buf, false);
@@ -205,5 +204,8 @@ public class Lz4FrameEncoderTest extends AbstractEncoderTest {
 
         channel.flush();
         Assert.assertEquals(0, encoder.getBuffer().readableBytes());
+        Assert.assertTrue(channel.finish());
+        Assert.assertTrue(channel.releaseOutbound());
+        Assert.assertFalse(channel.releaseInbound());
     }
 }
