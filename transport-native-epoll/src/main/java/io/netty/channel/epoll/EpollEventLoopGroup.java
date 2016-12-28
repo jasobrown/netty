@@ -34,6 +34,8 @@ import java.util.concurrent.ThreadFactory;
  */
 public final class EpollEventLoopGroup extends MultithreadEventLoopGroup {
 
+    private boolean outboundOnly;
+
     /**
      * Create a new instance using the default number of threads and the default {@link ThreadFactory}.
      */
@@ -125,8 +127,17 @@ public final class EpollEventLoopGroup extends MultithreadEventLoopGroup {
         }
     }
 
+    public void setOutboundOnly(boolean b) {
+        outboundOnly = b;
+    }
+
     @Override
     protected EventLoop newChild(Executor executor, Object... args) throws Exception {
+        if (outboundOnly) {
+            return new OutboundOnlyEpollEventLoop(this, executor, (Integer) args[0],
+                          ((SelectStrategyFactory) args[1]).newSelectStrategy(), (RejectedExecutionHandler) args[2]);
+        }
+
         return new EpollEventLoop(this, executor, (Integer) args[0],
                 ((SelectStrategyFactory) args[1]).newSelectStrategy(), (RejectedExecutionHandler) args[2]);
     }

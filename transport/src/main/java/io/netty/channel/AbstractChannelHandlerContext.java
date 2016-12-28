@@ -1092,7 +1092,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
                 ctx = null;
                 msg = null;
                 promise = null;
-                handle.recycle(this);
+//                handle.recycle(this);
             }
         }
 
@@ -1112,7 +1112,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
         private static WriteTask newInstance(
                 AbstractChannelHandlerContext ctx, Object msg, ChannelPromise promise) {
-            WriteTask task = RECYCLER.get();
+            WriteTask task = new WriteTask(null);
             init(task, ctx, msg, promise);
             return task;
         }
@@ -1133,7 +1133,7 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
         private static WriteAndFlushTask newInstance(
                 AbstractChannelHandlerContext ctx, Object msg,  ChannelPromise promise) {
-            WriteAndFlushTask task = RECYCLER.get();
+            WriteAndFlushTask task = new WriteAndFlushTask(null);
             init(task, ctx, msg, promise);
             return task;
         }
